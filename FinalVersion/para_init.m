@@ -11,8 +11,8 @@ NoisePower    = 10^((N0+10*log10(B)+NF-30)/10);                     % dBm --> W
 beta0         = (wavelength / (4*pi))^2;                            % average power gain at a reference distance of 1m
 
 % IRS related parameters
-d_irs_Y    = wavelength/2;                                          % length of the IRS element
-d_irs_Z    = wavelength/2;                                          % width of the IRS element
+d_IRS_Y    = wavelength/2;                                          % length of the IRS element
+d_IRS_Z    = wavelength/2;                                          % width of the IRS element
 H_i        = 25;                                                    % height of the IRS(m)
 M          = [6 8 10 12 14 16 18 20];                               % M and N should be odd
 N          = [6 8 10 12 14 16 18 20];
@@ -30,13 +30,15 @@ hpbw       = acosd( (1/2)^(1/(G_tx/2-1)) )*2;                       % half-power
 P_t        = 10^((10-30)/10);                                       % 10dBm --> 0.01W
 D          = zeros(1,length(M));                                    % TX-IRS distance(m)
 for idx = 1:length(M)
-    D(idx) = calDistanceFromTXtoIRS(M(idx)*N(idx), hpbw, d_irs_Y*d_irs_Z);
+    D(idx) = calDistanceFromTXtoIRS(M(idx)*N(idx), hpbw, d_IRS_Y*d_IRS_Z);
 end
 
 % UE related parameters
-r             = 500/3;                                              % radius of sector
-Hue           = [1.5 120];                                          % the height of UE(m) 1.5 for ground UE, 120 for aerial UE
-numPlot       = length(Hue);                                        % num of UE layers for plotting
+sample_interv_x = 3;
+sample_interv_y = 10;
+r = 500/3; % radius of sector
+Hue             = [1.5 120];                                          % the height of UE(m) 1.5 for ground UE, 120 for aerial UE
+num_plot         = length(Hue);                                        % num of UE layers for plotting
 
 % Rician K-factor for aerial users
 Kmin       = 0;                                                     % dB
@@ -56,21 +58,21 @@ dH            = wavelength/2;
 centeridx     = floor(N_b./2).*M_b+floor(M_b./2)+1;                 % index of the center element
 
 % Other parameters
-numTrials       = 100;                                              % num of channel realizations
-numfading       = 500;                                              % num of fading
-numSectors      = 1;                                                % single cell
-numBenchmark    = 2;                                                % num of the traditional BS scheme
-numIRSscheme    = length(G_i);                                      % num of the IRS-aided BS scheme with different ERP
-numScheme       = numBenchmark + numIRSscheme;
+num_trials        = 100;                                              % num of channel realizations
+num_fading        = 500;                                              % num of fading
+num_sectors       = 1;                                                % single cell
+num_benchmark     = 2;                                                % num of the traditional BS scheme
+num_IRSscheme     = length(G_i);                                      % num of the IRS-aided BS scheme with different ERP
+numScheme       = num_benchmark + num_IRSscheme;
 
 % angular spread from scattered waves
 % cited by《A 3D geometry-based stochastic channel model for UAV-MIMO channels》
 syms theta phi
 k               = 0.5;                                              % spreading control parameter
-theta_g         = pi/10;                                            % for MainIRSaidedBSinSingleCell/MultipleCells.m
-theta_m         = pi/10; 
-% theta_g         = [5*pi/12 pi/12];                                  % for RicianKfactorMCProve.m
-% theta_m         = [pi/12 pi/12];                                    % for RicianKfactorMCProve.m
+% theta_g         = pi/10;                                            % for MainIRSaidedBSinSingleCell/MultipleCells.m
+% theta_m         = pi/10; 
+theta_g         = [5*pi/12 pi/12];                                  % for RicianKfactorMCProve.m
+theta_m         = [pi/12 pi/12];                                    % for RicianKfactorMCProve.m
 lower_cos       = pi/2 - (theta_g + theta_m);
 upper_cos       = pi/2 - (theta_g - theta_m);
 lower_von       = pi;
@@ -78,6 +80,8 @@ upper_von       = 2*pi;
 phi_mu          = 3*pi/2;
 
 % Fixed BS pattern & 3D beamforming scheme
+hdfunc_deg2rad = @(deg)deg / 180*pi;
+
 theta_g_bs        = pi/10 * 180/pi;
 theta_m_bs        = pi/10 * 180/pi;
 lower_cos_bs      = 90 - (theta_g_bs + theta_m_bs);
@@ -89,15 +93,22 @@ phi_mu_bs         = -90;
 phi_bs            = reshape(repmat(phi_bs_ori', length(theta_bs_ori), 1), [], 1);
 theta_bs          = repmat(90+theta_bs_ori, length(phi_bs_ori), 1); % ground
 
+theta_g_bs_rad = hdfunc_deg2rad(theta_g_bs);
+theta_m_bs_rad = hdfunc_deg2rad(theta_m_bs);
+theta_bs_ori_rad = hdfunc_deg2rad(theta_bs_ori);
+
+phi_bs_ori_rad = hdfunc_deg2rad(phi_bs_ori);
+phi_mu_bs_rad = hdfunc_deg2rad(phi_mu_bs);
+
 % Function
 % cited by《3D trajectory optimization in Rician fading for UAV-enabled data harvesting》
 funcRicianK = @(theta_K)A1.*exp(A2.*theta_K);
 % cited by《A 3D geometry-based stochastic channel model for UAV-MIMO channels》
-funcCosinePdf = @(theta,theta_g,theta_m)pi/(4*theta_m) * cos(pi/(2*theta_m)*(theta-theta_g));
+funcCosinePdf = @(theta,theta_g,theta_m)pi/(4*theta_m) * cos(pi/(2*theta_m)*(pi/2-theta-theta_g));
 funcVonMisesPdf = @(phi,phi_mu,k)exp(k*cos(phi-phi_mu))/(2*pi*besseli(0,k));
 
-maxCosinePdf = pi./(4.*theta_m);
-maxVonMisesPdf = exp(k)/(2*pi*besseli(0,k));
+max_cosine_pdf = pi./(4.*theta_m);
+max_vonMises_pdf = exp(k)/(2*pi*besseli(0,k));
 
 % Hypergeometric function
 L = @(x)hypergeom(-1/2,1,x);         
